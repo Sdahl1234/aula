@@ -390,8 +390,10 @@ class Client:
                     )
                     # _LOGGER.debug("ugeplaner status_code "+str(ugeplaner.status_code))
                     # _LOGGER.debug("ugeplaner response "+str(ugeplaner.text))
-                    self.opg_attr = {}
-                    self.opgnext_attr = {}
+                    if thisnext == "this":
+                        self.opg_attr = {}
+                    else:
+                        self.opgnext_attr = {}
                     navne = []
                     dage = ["Mandag", "Tirsdag", "Onsdag", "Torsdag", "Fredag"]
                     for opgave in opgaver_resp.json()["opgaver"]:
@@ -399,11 +401,15 @@ class Client:
                         navn = kuvertnavn.split()[0]
                         if navn not in navne:
                             navne.append(navn)
-                            self.opg_attr[navn] = {}
-                            self.opgnext_attr[navn] = {}
-                            for dag in dage:
-                                self.opg_attr[navn][dag] = []
-                                self.opgnext_attr[navn][dag] = []
+                            if thisnext == "this":
+                                self.opg_attr[navn] = {}
+                                for dag in dage:
+                                    self.opg_attr[navn][dag] = []
+                            else:
+                                self.opgnext_attr[navn] = {}
+                                for dag in dage:
+                                    self.opgnext_attr[navn][dag] = []
+
                         ugedag = opgave["ugedag"]
                         vals = {}
                         if len(opgave["hold"]) > 0:
