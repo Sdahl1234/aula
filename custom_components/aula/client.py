@@ -256,57 +256,74 @@ class Client:
         )
         # _LOGGER.debug("mesres "+str(mesres.text))
         self.unread_messages = 0
-        unread = 0
         self.message = {}
+        max_messages = 10
+        unread = 0
+        message_count = 0
+        threadid = []
+        messages = {}
+        messages["message"] = []
+
+        # _message = {}
         for mes in mesres.json()["data"]["threads"]:
             if not mes["read"]:
                 # self.unread_messages = 1
-                unread = 1
-                threadid = mes["id"]
-                break
+                message_count = message_count + 1
+                threadid.append(mes["id"])
+                # threadid = mes["id"]
+                # if unread >= max_messages:
+                #    break
         # if self.unread_messages == 1:
-        if unread == 1:
+        if message_count > 0:
             # _LOGGER.debug("tid "+str(threadid))
-            threadres = self._session.get(
-                self.apiurl
-                + "?method=messaging.getMessagesForThread&threadId="
-                + str(threadid)
-                + "&page=0",
-                verify=True,
-            )
-            # _LOGGER.debug("threadres "+str(threadres.text))
-            if threadres.json()["status"]["code"] == 403:
-                self.message[
-                    "text"
-                ] = "Log ind på Aula med MitID for at læse denne besked."
-                self.message["sender"] = "Ukendt afsender"
-                self.message["subject"] = "Følsom besked"
-            else:
-                for message in threadres.json()["data"]["messages"]:
-                    if message["messageType"] == "Message":
-                        try:
-                            self.message["text"] = message["text"]["html"]
-                        except:
-                            try:
-                                self.message["text"] = message["text"]
-                            except:
-                                self.message["text"] = "intet indhold..."
-                                _LOGGER.warning(
-                                    "There is an unread message, but we cannot get the text."
-                                )
-                        try:
-                            self.message["sender"] = message["sender"]["fullName"]
-                        except:
-                            self.message["sender"] = "Ukendt afsender"
-                        try:
-                            self.message["subject"] = threadres.json()["data"][
-                                "subject"
-                            ]
-                        except:
-                            self.message["subject"] = ""
-                        self.unread_messages = 1
-                        break
+            for ids in threadid:
+                threadres = self._session.get(
+                    self.apiurl
+                    + "?method=messaging.getMessagesForThread&threadId="
+                    + str(ids)
+                    + "&page=0",
+                    verify=True,
+                )
+                # _LOGGER.debug("threadres "+str(threadres.text))
+                if threadres.json()["status"]["code"] == 403:
+                    vals = {}
 
+                    vals["text"] = "Log ind på Aula med MitID for at læse denne besked."
+                    vals["sender"] = "Ukendt afsender"
+                    vals["subject"] = "Følsom besked"
+                    messages["message"].append(vals)
+                    unread = unread + 1
+                else:
+                    for message in threadres.json()["data"]["messages"]:
+                        if message["messageType"] == "Message":
+                            vals = {}
+                            try:
+                                vals["text"] = message["text"]["html"]
+                            except:  # noqa: E722
+                                try:
+                                    vals["text"] = message["text"]
+                                except:  # noqa: E722
+                                    vals["text"] = "intet indhold..."
+                                    _LOGGER.warning(
+                                        "There is an unread message, but we cannot get the text"
+                                    )
+                            try:
+                                vals["sender"] = message["sender"]["fullName"]
+                            except:  # noqa: E722
+                                vals["sender"] = "Ukendt afsender"
+                            try:
+                                vals["subject"] = message["subject"] = threadres.json()[
+                                    "data"
+                                ]["subject"]
+                            except:  # noqa: E722
+                                vals["subject"] = ""
+                            unread = unread + 1
+                            messages["message"].append(vals)
+
+                self.unread_messages = unread
+                if unread >= max_messages:
+                    break
+        self.message = messages
         # Calendar:
         if self._schoolschedule == True:
             instProfileIds = ",".join(self._childids)

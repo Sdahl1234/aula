@@ -8,12 +8,12 @@
         "@scaarup"
     ],
     "config_flow": true,
-    "documentation": "https://github.com/Sdahl1234/aula",
+    "documentation": "https://github.com/scaarup/aula/blob/main/README.md",
     "iot_class": "cloud_polling",
-    "issue_tracker": "https://github.com/Sdahl1234/aula/issues",
+    "issue_tracker": "https://github.com/scaarup/aula/issues",
     "requirements": [
         "beautifulsoup4",
         "lxml"
     ],
-    "version": "1.0.1"
+    "version": "1.0.2"
 }
