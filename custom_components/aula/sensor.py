@@ -1,14 +1,12 @@
-from .const import DOMAIN
-import logging
+"""Sensors."""
 from datetime import datetime, timedelta
 import json
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant import config_entries, core
-from homeassistant.helpers import entity_platform
-from .client import Client
+import logging
 
 import voluptuous as vol
+
+from homeassistant import config_entries, core
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
@@ -16,15 +14,14 @@ from homeassistant.core import (
     SupportsResponse,
 )
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
+from .client import Client
+from .const import CONF_SCHOOLSCHEDULE, CONF_UGEPLAN, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-from homeassistant.const import CONF_USERNAME, CONF_PASSWORD
-from .const import (
-    CONF_SCHOOLSCHEDULE,
-    CONF_UGEPLAN,
-    DOMAIN,
-)
 
 API_CALL_SERVICE_NAME = "api_call"
 API_CALL_SCHEMA = vol.Schema(
@@ -42,7 +39,7 @@ async def async_setup_entry(
     config_entry: config_entries.ConfigEntry,
     async_add_entities,
 ):
-    """Setup sensors from a config entry created in the integrations UI."""
+    """Async Setup sensors from a config entry created in the integrations UI."""
     config = hass.data[DOMAIN][config_entry.entry_id]
 
     if config_entry.options:
@@ -74,14 +71,12 @@ async def async_setup_entry(
     entities = []
     client = hass.data[DOMAIN]["client"]
     await hass.async_add_executor_job(client.update_data)
-    for i, child in enumerate(client._children):
+    for _i, child in enumerate(client.children):
         # _LOGGER.debug("Presence data for child "+str(child["id"])+" : "+str(client.presence[str(child["id"])]))
         if client.presence[str(child["id"])] == 1:
-            if str(child["id"]) in client._daily_overview:
+            if str(child["id"]) in client.daily_overview:
                 _LOGGER.debug(
-                    "Found presence data for childid "
-                    + str(child["id"])
-                    + " adding sensor entity."
+                    f"Found presence data for childid {str(child["id"])} adding sensor entity"  # noqa: G004
                 )
                 entities.append(AulaSensor(hass, coordinator, child))
         else:
@@ -97,11 +92,8 @@ async def async_setup_entry(
     )
     ####
 
-    global ugeplan
-    if config[CONF_UGEPLAN]:
-        ugeplan = True
-    else:
-        ugeplan = False
+    global ugeplan  # noqa: PLW0603
+    ugeplan = bool(config[CONF_UGEPLAN])
     async_add_entities(entities, update_before_add=True)
 
     def custom_api_call_service(call: ServiceCall) -> ServiceResponse:
@@ -121,7 +113,10 @@ async def async_setup_entry(
 
 
 class AulaSensor(Entity):
-    def __init__(self, hass, coordinator, child) -> None:
+    """AulaSensor."""
+
+    def __init__(self, hass: HomeAssistant, coordinator, child) -> None:
+        """Init."""
         self._hass = hass
         self._coordinator = coordinator
         self._child = child
@@ -129,21 +124,21 @@ class AulaSensor(Entity):
 
     @property
     def name(self):
-        childname = self._client._childnames[self._child["id"]].split()[0]
-        institution = self._client._institutions[self._child["id"]]
+        """Name."""
+        childname = self._client.childnames_[self._child["id"]].split()[0]
+        institution = self._client.institutions[self._child["id"]]
         return institution + " " + childname
 
     @property
     def state(self):
-        """
-        0 = IKKE KOMMET
-        1 = SYG
-        2 = FERIE/FRI
-        3 = KOMMET/TIL STEDE
-        4 = PÅ TUR
-        5 = SOVER
-        8 = HENTET/GÅET
-        """
+        """States."""
+        # 0 = IKKE KOMMET
+        # 1 = SYG
+        # 2 = FERIE/FRI
+        # 3 = KOMMET/TIL STEDE
+        # 4 = PÅ TUR
+        # 5 = SOVER
+        # 8 = HENTET/GÅET
         if self._client.presence[str(self._child["id"])] == 1:
             states = [
                 "Ikke kommet",
@@ -163,21 +158,21 @@ class AulaSensor(Entity):
                 "14",
                 "15",
             ]
-            daily_info = self._client._daily_overview[str(self._child["id"])]
+            daily_info = self._client.daily_overview[str(self._child["id"])]
             return states[daily_info["status"]]
-        else:
-            _LOGGER.debug("Setting state to n/a for child " + str(self._child["id"]))
-            return "n/a"
+        _LOGGER.debug(f"Setting state to n/a for child {str(self._child['id'])}")  # noqa: G004
+        return "n/a"
 
     @property
     def extra_state_attributes(self):
+        """Attr."""
         if self._client.presence[str(self._child["id"])] == 1:
-            daily_info = self._client._daily_overview[str(self._child["id"])]
+            daily_info = self._client.daily_overview[str(self._child["id"])]
             try:
                 profilePicture = daily_info["institutionProfile"]["profilePicture"][
                     "url"
                 ]
-            except:
+            except Exception:  # pylint: disable=broad-except
                 profilePicture = None
 
         fields = [
@@ -201,11 +196,17 @@ class AulaSensor(Entity):
             if "0030" in self._client.widgets:
                 try:
                     name = self._child["name"].split()[0]
-                    opgaver = self._client.opg_attr[name]
-                    attributes["opgaver"] = json.dumps(opgaver)
-                    opgaver_next = self._client.opgnext_attr[name]
-                    attributes["opgaver_next"] = json.dumps(opgaver_next)
-                except:
+                    try:
+                        opgaver = self._client.opg_attr[name]
+                        attributes["opgaver"] = json.dumps(opgaver)
+                    except Exception:  # pylint: disable=broad-except
+                        attributes["Opgaver"] = "Not available"
+                    try:
+                        opgaver_next = self._client.opgnext_attr[name]
+                        attributes["opgaver_next"] = json.dumps(opgaver_next)
+                    except Exception:  # pylint: disable=broad-except
+                        attributes["opgaver_next"] = "Not available"
+                except Exception:  # pylint: disable=broad-except
                     attributes["Opgaver"] = "Not available"
 
             if "0062" in self._client.widgets:
@@ -213,24 +214,22 @@ class AulaSensor(Entity):
                     attributes["huskelisten"] = self._client.huskeliste[
                         self._child["name"].split()[0]
                     ]
-                except:
+                except Exception:  # pylint: disable=broad-except
                     attributes["huskelisten"] = "Not available"
             try:
                 attributes["ugeplan"] = self._client.ugep_attr[
                     self._child["name"].split()[0]
                 ]
-            except:
+            except Exception:  # pylint: disable=broad-except
                 attributes["ugeplan"] = "Not available"
             try:
                 attributes["ugeplan_next"] = self._client.ugepnext_attr[
                     self._child["name"].split()[0]
                 ]
-            except:
+            except Exception:  # pylint: disable=broad-except
                 attributes["ugeplan_next"] = "Not available"
                 _LOGGER.debug(
-                    "Could not get ugeplan for next week for child "
-                    + str(self._child["name"].split()[0])
-                    + ". Perhaps not available yet."
+                    f"Could not get ugeplan for next week for child {str(self._child["name"].split()[0])}. Perhaps not available yet"  # noqa: G004
                 )
         if self._client.presence[str(self._child["id"])] == 1:
             for attribute in fields:
@@ -241,7 +240,7 @@ class AulaSensor(Entity):
                         attributes[attribute] = datetime.strptime(
                             daily_info[attribute], "%H:%M:%S"
                         ).strftime("%H:%M")
-                    except:
+                    except Exception:  # pylint: disable=broad-except
                         attributes[attribute] = daily_info[attribute]
             attributes["profilePicture"] = profilePicture
         return attributes
@@ -258,12 +257,14 @@ class AulaSensor(Entity):
 
     @property
     def unique_id(self):
+        """UniqueId."""
         unique_id = "aula" + str(self._child["id"])
-        _LOGGER.debug("Unique ID for child " + str(self._child["id"]) + " " + unique_id)
+        _LOGGER.debug(f"Unique ID for child {str(self._child["id"])} {unique_id}")  # noqa: G004
         return unique_id
 
     @property
     def icon(self):
+        """Icon."""
         return "mdi:account-school"
 
     async def async_update(self):
